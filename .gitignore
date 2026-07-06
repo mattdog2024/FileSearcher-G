@@ -1,0 +1,20 @@
+# .NET build artifacts
+bin/
+obj/
+*.user
+
+# Local dotnet SDK download (not part of repo)
+.dotnet/
+dotnet-install.sh
+
+# Probe/scratch projects
+_probe/
+_inspect/
+
+# IDE
+.vs/
+.vscode/
+
+# Test/index output at runtime
+*.filetrace-index/
+TestResults/

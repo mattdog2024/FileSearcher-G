@@ -1,0 +1,31 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="jieba.NET" Version="0.42.2" />
+    <PackageReference Include="Lucene.Net" Version="4.8.0-beta00018" />
+    <PackageReference Include="Lucene.Net.Analysis.Common" Version="4.8.0-beta00018" />
+    <PackageReference Include="Lucene.Net.Highlighter" Version="4.8.0-beta00018" />
+    <PackageReference Include="Lucene.Net.QueryParser" Version="4.8.0-beta00018" />
+    <PackageReference Include="NPOI" Version="2.5.6" />
+    <PackageReference Include="PdfPig" Version="0.1.15" />
+    <PackageReference Include="ScratchPad.NPOI.HWPF" Version="2.5.7" />
+    <PackageReference Include="System.Text.Encoding.CodePages" Version="8.0.0" />
+    <PackageReference Include="UTF.Unknown" Version="2.6.0" />
+  </ItemGroup>
+
+  <!-- jieba.NET 的中文分词词典资源不会被自动复制到输出目录，这里手动从 NuGet 包内容里拷贝，
+       确保任何引用本项目的可执行程序（包括最终发布的便携版 exe）运行目录下都带有 Resources/ 词典文件 -->
+  <ItemGroup>
+    <None Include="$(NuGetPackageRoot)jieba.net\0.42.2\Resources\**\*.*">
+      <Link>Resources\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>
