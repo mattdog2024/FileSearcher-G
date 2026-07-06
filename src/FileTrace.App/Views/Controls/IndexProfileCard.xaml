@@ -74,10 +74,7 @@
                         FontSize="11"
                         Command="{Binding TogglePauseCommand}"
                         Visibility="{Binding IsBuilding, Converter={StaticResource BoolToVis}}"
-                        Content="暂停" />
-                <!-- TODO(Stage3待办): IsPaused 为 true 时按钮文案应切换为"继续"，
-                     当前先保证功能正确（TogglePauseCommand 已正确调用 PauseController.Pause/Resume），
-                     文案切换留待下一轮补一个 BoolToStringConverter 或 DataTrigger。 -->
+                        Content="{Binding PauseButtonLabel}" />
                 <Button Style="{StaticResource SecondaryButtonStyle}"
                         Padding="10,4"
                         FontSize="11"

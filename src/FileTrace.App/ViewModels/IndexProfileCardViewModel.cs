@@ -64,7 +64,11 @@ public sealed partial class IndexProfileCardViewModel : ObservableObject
 
     /// <summary>当前是否处于"已暂停"状态（仅在 IsBuilding 为 true 时有意义）。</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PauseButtonLabel))]
     private bool isPaused;
+
+    /// <summary>"暂停/继续"按钮文案，随 IsPaused 切换。</summary>
+    public string PauseButtonLabel => IsPaused ? "继续" : "暂停";
 
     /// <summary>
     /// 本次运行关联的暂停控制器：MainViewModel 发起 IIndexingService.RunAsync 时会传入这个实例，

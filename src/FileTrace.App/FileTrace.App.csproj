@@ -30,6 +30,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\FileTrace.Core\FileTrace.Core.csproj" />
+    <ProjectReference Include="..\FileTrace.App.Services\FileTrace.App.Services.csproj" />
   </ItemGroup>
 
 </Project>

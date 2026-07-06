@@ -15,7 +15,7 @@ public sealed class MockIndexingService : IIndexingService
         IndexProfile profile,
         bool rebuildFromScratch,
         ScanPauseController pauseController,
-        IProgress<ScanProgress> progress,
+        IProgress<ScanProgress>? progress,
         CancellationToken cancellationToken = default)
     {
         const int fakeTotalFiles = 120;
@@ -31,7 +31,7 @@ public sealed class MockIndexingService : IIndexingService
             state.FilesScanned = i;
             state.FilesIndexed = i;
             state.CurrentPath = Path.Combine(profile.RootPath, $"示例文件_{i:D3}.docx");
-            progress.Report(state);
+            progress?.Report(state);
         }
 
         return new IndexingSummary

@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!--
+      测试的是 FileTrace.App.Services（纯 net8.0 类库，不依赖 WPF），
+      所以本测试项目本身也是普通 net8.0，可以在 Linux 沙箱内直接 dotnet test 运行，
+      不需要 EnableWindowsTargeting/Windows Desktop Runtime。
+    -->
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
+    <PackageReference Include="xunit" Version="2.5.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.5.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\FileTrace.App.Services\FileTrace.App.Services.csproj" />
+    <ProjectReference Include="..\..\src\FileTrace.Core\FileTrace.Core.csproj" />
+  </ItemGroup>
+
+</Project>

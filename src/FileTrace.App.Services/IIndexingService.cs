@@ -26,6 +26,6 @@ public interface IIndexingService
         IndexProfile profile,
         bool rebuildFromScratch,
         ScanPauseController pauseController,
-        IProgress<ScanProgress> progress,
+        IProgress<ScanProgress>? progress,
         CancellationToken cancellationToken = default);
 }
