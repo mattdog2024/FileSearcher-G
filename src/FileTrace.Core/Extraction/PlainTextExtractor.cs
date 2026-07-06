@@ -45,6 +45,12 @@ public sealed class PlainTextExtractor : IContentExtractor
             System.Text.Encoding encoding = detected?.Encoding ?? System.Text.Encoding.UTF8;
 
             string text = encoding.GetString(bytes);
+            // Encoding.GetString 不会自动剥离 BOM（字节顺序标记），若文件带 UTF-8/UTF-16 BOM，
+            // 解码后文本开头会残留一个不可见的 U+FEFF 字符，干扰后续搜索的精确匹配与预览显示。
+            if (text.Length > 0 && text[0] == '\uFEFF')
+            {
+                text = text.Substring(1);
+            }
             return ExtractResult.Ok(text);
         }
         catch (UnauthorizedAccessException ex)

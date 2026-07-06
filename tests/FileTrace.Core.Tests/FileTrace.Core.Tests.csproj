@@ -24,4 +24,12 @@
     <ProjectReference Include="..\..\src\FileTrace.Core\FileTrace.Core.csproj" />
   </ItemGroup>
 
+  <!-- 测试固定素材（例如 PdfExtractor 需要一个真实的、结构合法的最小 PDF 样本来验证文本提取），
+       需要显式拷贝到测试运行目录下，测试代码里用 AppContext.BaseDirectory 拼接访问 -->
+  <ItemGroup>
+    <None Include="TestFixtures\**\*.*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>
