@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <ApplicationIcon></ApplicationIcon>
+    <AssemblyName>FileTrace</AssemblyName>
+    <RootNamespace>FileTrace.App</RootNamespace>
+
+    <!--
+      本项目在 Windows 上由 Visual Studio / dotnet build 正常编译。
+      为了让本项目也能在 Linux 沙箱（无 Windows 桌面工作负载）里通过 `dotnet build` 验证编译，
+      显式启用 EnableWindowsTargeting，让 SDK 从 NuGet 下载 Microsoft.WindowsDesktop.App 的
+      引用包（Ref Pack）用于编译期类型解析，不依赖本机安装的 Windows Desktop Runtime。
+      最终发布仍然只面向 Windows 10 x64，不影响生产可执行文件的行为。
+    -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+
+    <!-- 便携版单文件自包含发布相关设置，Stage4 打包时会用到，这里先占位声明 -->
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+    <SelfContained>false</SelfContained>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.3.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FileTrace.Core\FileTrace.Core.csproj" />
+  </ItemGroup>
+
+</Project>

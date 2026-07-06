@@ -1,0 +1,230 @@
+using System.Collections.ObjectModel;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using FileTrace.App.Services;
+using FileTrace.Core.Models;
+using FileTrace.Core.Search;
+
+namespace FileTrace.App.ViewModels;
+
+/// <summary>
+/// 主窗口视图模型：承载左侧索引抽屉列表、顶部搜索框、类型筛选行、搜索结果列表，
+/// 以及"新建索引"对话框的打开/确认流程。
+///
+/// 依赖通过构造函数注入的 <see cref="IIndexProfileRepository"/> / <see cref="ISearchGateway"/> 抽象，
+/// Stage2 由 App.xaml.cs 组装 Mock 实现运行；Stage3 只需要在组合根替换为真实实现，
+/// 本类与所有 View 完全不需要改动。
+/// </summary>
+public sealed partial class MainViewModel : ObservableObject
+{
+    private readonly IIndexProfileRepository _profileRepository;
+    private readonly ISearchGateway _searchGateway;
+    private CancellationTokenSource? _searchCts;
+
+    public MainViewModel(IIndexProfileRepository profileRepository, ISearchGateway searchGateway)
+    {
+        _profileRepository = profileRepository;
+        _searchGateway = searchGateway;
+
+        IndexProfiles = new ObservableCollection<IndexProfileCardViewModel>();
+        SearchResults = new ObservableCollection<SearchResultItemViewModel>();
+
+        FilterChips = new ObservableCollection<FilterChipViewModel>
+        {
+            new("all", "全部", isSelected: true),
+            new("doc", "文档"),
+            new("sheet", "表格"),
+            new("pdf", "PDF"),
+            new("ppt", "演示文稿"),
+            new("code", "代码"),
+            new("text", "文本"),
+        };
+        foreach (var chip in FilterChips)
+        {
+            chip.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(FilterChipViewModel.IsSelected) && chip.IsSelected)
+                {
+                    SelectFilterChip(chip);
+                }
+            };
+        }
+    }
+
+    public ObservableCollection<IndexProfileCardViewModel> IndexProfiles { get; }
+
+    public ObservableCollection<SearchResultItemViewModel> SearchResults { get; }
+
+    public ObservableCollection<FilterChipViewModel> FilterChips { get; }
+
+    [ObservableProperty]
+    private string queryText = string.Empty;
+
+    [ObservableProperty]
+    private bool isSearching;
+
+    [ObservableProperty]
+    private bool hasSearched;
+
+    [ObservableProperty]
+    private int totalHits;
+
+    [ObservableProperty]
+    private string statusMessage = "在上方输入关键词开始搜索，或先在左侧新建一个索引";
+
+    [ObservableProperty]
+    private bool isIndexDrawerOpen = true;
+
+    [ObservableProperty]
+    private bool isNewIndexDialogOpen;
+
+    [ObservableProperty]
+    private NewIndexDialogViewModel? newIndexDialog;
+
+    /// <summary>没有任何索引时的空态提示（区别于"搜索无结果"的空态）。</summary>
+    public bool HasNoProfiles => IndexProfiles.Count == 0;
+
+    public bool HasNoResults => HasSearched && !IsSearching && SearchResults.Count == 0;
+
+    public async Task InitializeAsync()
+    {
+        var profiles = await _profileRepository.GetAllAsync();
+        IndexProfiles.Clear();
+        foreach (var p in profiles)
+        {
+            var card = new IndexProfileCardViewModel(p);
+            card.RemoveRequested += async (_, _) => await RemoveProfileAsync(card);
+            IndexProfiles.Add(card);
+        }
+        OnPropertyChanged(nameof(HasNoProfiles));
+    }
+
+    [RelayCommand]
+    private void ToggleIndexDrawer()
+    {
+        IsIndexDrawerOpen = !IsIndexDrawerOpen;
+    }
+
+    [RelayCommand]
+    private void OpenNewIndexDialog()
+    {
+        NewIndexDialog = new NewIndexDialogViewModel();
+        IsNewIndexDialogOpen = true;
+    }
+
+    [RelayCommand]
+    private void CancelNewIndexDialog()
+    {
+        IsNewIndexDialogOpen = false;
+        NewIndexDialog = null;
+    }
+
+    [RelayCommand]
+    private async Task ConfirmNewIndexDialogAsync()
+    {
+        if (NewIndexDialog is null || !NewIndexDialog.CanConfirm)
+        {
+            return;
+        }
+
+        var profile = NewIndexDialog.BuildProfile();
+        var created = await _profileRepository.CreateAsync(profile);
+
+        var card = new IndexProfileCardViewModel(created);
+        card.RemoveRequested += async (_, _) => await RemoveProfileAsync(card);
+        IndexProfiles.Add(card);
+        OnPropertyChanged(nameof(HasNoProfiles));
+
+        IsNewIndexDialogOpen = false;
+        NewIndexDialog = null;
+    }
+
+    private async Task RemoveProfileAsync(IndexProfileCardViewModel card)
+    {
+        await _profileRepository.DeleteAsync(card.Profile.Id);
+        IndexProfiles.Remove(card);
+        OnPropertyChanged(nameof(HasNoProfiles));
+    }
+
+    private void SelectFilterChip(FilterChipViewModel selected)
+    {
+        foreach (var chip in FilterChips)
+        {
+            if (!ReferenceEquals(chip, selected))
+            {
+                chip.IsSelected = false;
+            }
+        }
+    }
+
+    partial void OnQueryTextChanged(string value)
+    {
+        SearchCommand.NotifyCanExecuteChanged();
+    }
+
+    private bool CanSearch() => !string.IsNullOrWhiteSpace(QueryText) && !IsSearching;
+
+    [RelayCommand(CanExecute = nameof(CanSearch))]
+    private async Task SearchAsync()
+    {
+        _searchCts?.Cancel();
+        var cts = new CancellationTokenSource();
+        _searchCts = cts;
+
+        IsSearching = true;
+        HasSearched = true;
+        StatusMessage = "搜索中…";
+
+        try
+        {
+            var selectedCategory = FilterChips.FirstOrDefault(c => c.IsSelected)?.Category ?? "all";
+            var profileIds = IndexProfiles.Select(p => p.Profile.Id).ToList();
+
+            var request = new SearchRequest(QueryText.Trim(), SearchFieldScope.FileNameAndContent, profileIds);
+            var result = await _searchGateway.SearchAsync(request, cts.Token);
+
+            if (cts.IsCancellationRequested)
+            {
+                return;
+            }
+
+            var items = selectedCategory == "all"
+                ? result.Items
+                : result.Items.Where(i => FileTypeCatalog.Find(i.ExtensionNoDot)?.Category == selectedCategory).ToList();
+
+            SearchResults.Clear();
+            foreach (var item in items)
+            {
+                SearchResults.Add(new SearchResultItemViewModel(item));
+            }
+
+            TotalHits = result.TotalHits;
+            StatusMessage = SearchResults.Count > 0
+                ? $"找到 {result.TotalHits} 个结果"
+                : "没有找到匹配的文件，换个关键词试试？";
+        }
+        catch (OperationCanceledException)
+        {
+            // 新的搜索请求已发出，忽略被取消的旧请求。
+        }
+        finally
+        {
+            if (ReferenceEquals(_searchCts, cts))
+            {
+                IsSearching = false;
+            }
+            OnPropertyChanged(nameof(HasNoResults));
+        }
+    }
+
+    [RelayCommand]
+    private void ClearSearch()
+    {
+        QueryText = string.Empty;
+        SearchResults.Clear();
+        HasSearched = false;
+        TotalHits = 0;
+        StatusMessage = "在上方输入关键词开始搜索，或先在左侧新建一个索引";
+        OnPropertyChanged(nameof(HasNoResults));
+    }
+}

@@ -1,0 +1,21 @@
+<UserControl x:Class="FileTrace.App.Views.Controls.LoadingSpinner"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             Loaded="OnLoaded"
+             Unloaded="OnUnloaded">
+    <!-- 简单的环形旋转加载指示器：一个带缺口的圆环，通过 RenderTransform 旋转动画实现。 -->
+    <Grid>
+        <Ellipse x:Name="Ring"
+                 Stroke="{StaticResource PrimaryBrush}"
+                 StrokeThickness="3"
+                 StrokeDashArray="0.75 0.25"
+                 RenderTransformOrigin="0.5,0.5">
+            <Ellipse.RenderTransform>
+                <RotateTransform x:Name="RingRotation" Angle="0" />
+            </Ellipse.RenderTransform>
+        </Ellipse>
+    </Grid>
+</UserControl>
