@@ -72,6 +72,13 @@ public sealed class MockIndexProfileRepository : IIndexProfileRepository
         return Task.FromResult(profile);
     }
 
+    public Task SaveAsync(IndexProfile profile, CancellationToken cancellationToken = default)
+    {
+        // 内存态 Mock：profile 是引用类型，调用方对同一实例的字段修改已经"生效"，
+        // 这里无需任何额外操作，仅为满足接口契约。
+        return Task.CompletedTask;
+    }
+
     public Task DeleteAsync(string profileId, CancellationToken cancellationToken = default)
     {
         _profiles.RemoveAll(p => p.Id == profileId);

@@ -172,6 +172,15 @@ public sealed class ManifestStore : IDisposable
         return (long)(cmd.ExecuteScalar() ?? 0L);
     }
 
+    /// <summary>已索引文件的总大小（字节），供 UI 统计行展示、写回 IndexProfile.TotalSizeBytes。</summary>
+    public long SumSizeBytes()
+    {
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = "SELECT COALESCE(SUM(size_bytes), 0) FROM file_fingerprint;";
+        var result = cmd.ExecuteScalar();
+        return result is DBNull or null ? 0L : Convert.ToInt64(result);
+    }
+
     public void Dispose()
     {
         _connection.Dispose();

@@ -13,5 +13,13 @@ public interface IIndexProfileRepository
 
     Task<IndexProfile> CreateAsync(IndexProfile profile, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// 持久化一个已存在索引的最新状态（例如一次索引任务完成后更新的 FileCount/TotalSizeBytes/
+    /// LastUpdatedAt/Status）。与 <see cref="CreateAsync"/> 的区别只是语义上的"新建 vs 更新"，
+    /// Mock 实现里两者行为等价（都只是内存态覆盖），Real 实现里都落到同一个 profile.json 写入逻辑，
+    /// 拆成两个方法是为了让调用方代码的意图更清晰。
+    /// </summary>
+    Task SaveAsync(IndexProfile profile, CancellationToken cancellationToken = default);
+
     Task DeleteAsync(string profileId, CancellationToken cancellationToken = default);
 }

@@ -137,6 +137,28 @@ public class ManifestStoreTests
     }
 
     [Fact]
+    public void SumSizeBytes_EmptyManifest_ReturnsZero()
+    {
+        using var dir = new TempDirectory();
+        using var store = ManifestStore.Open(System.IO.Path.Combine(dir.Path, "manifest.db"));
+
+        Assert.Equal(0, store.SumSizeBytes());
+    }
+
+    [Fact]
+    public void SumSizeBytes_SumsAllDistinctPathSizes()
+    {
+        using var dir = new TempDirectory();
+        using var store = ManifestStore.Open(System.IO.Path.Combine(dir.Path, "manifest.db"));
+
+        store.Upsert(new FileFingerprint { FullPath = "/a.txt", SizeBytes = 100, LastWriteTimeUtcTicks = 1 });
+        store.Upsert(new FileFingerprint { FullPath = "/b.txt", SizeBytes = 250, LastWriteTimeUtcTicks = 1 });
+        store.Upsert(new FileFingerprint { FullPath = "/a.txt", SizeBytes = 150, LastWriteTimeUtcTicks = 2 }); // 覆盖同一路径
+
+        Assert.Equal(400, store.SumSizeBytes());
+    }
+
+    [Fact]
     public void Open_PersistsAcrossReopens()
     {
         using var dir = new TempDirectory();

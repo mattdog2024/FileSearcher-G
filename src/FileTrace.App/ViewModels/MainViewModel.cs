@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using FileTrace.App.Services;
 using FileTrace.Core.Models;
+using FileTrace.Core.Scanning;
 using FileTrace.Core.Search;
 
 namespace FileTrace.App.ViewModels;
@@ -19,12 +20,18 @@ public sealed partial class MainViewModel : ObservableObject
 {
     private readonly IIndexProfileRepository _profileRepository;
     private readonly ISearchGateway _searchGateway;
+    private readonly IIndexingService _indexingService;
     private CancellationTokenSource? _searchCts;
+    private readonly Dictionary<string, CancellationTokenSource> _runningIndexTasks = new();
 
-    public MainViewModel(IIndexProfileRepository profileRepository, ISearchGateway searchGateway)
+    public MainViewModel(
+        IIndexProfileRepository profileRepository,
+        ISearchGateway searchGateway,
+        IIndexingService indexingService)
     {
         _profileRepository = profileRepository;
         _searchGateway = searchGateway;
+        _indexingService = indexingService;
 
         IndexProfiles = new ObservableCollection<IndexProfileCardViewModel>();
         SearchResults = new ObservableCollection<SearchResultItemViewModel>();
@@ -92,11 +99,80 @@ public sealed partial class MainViewModel : ObservableObject
         IndexProfiles.Clear();
         foreach (var p in profiles)
         {
-            var card = new IndexProfileCardViewModel(p);
-            card.RemoveRequested += async (_, _) => await RemoveProfileAsync(card);
-            IndexProfiles.Add(card);
+            AttachCard(new IndexProfileCardViewModel(p));
         }
         OnPropertyChanged(nameof(HasNoProfiles));
+    }
+
+    private void AttachCard(IndexProfileCardViewModel card)
+    {
+        card.RemoveRequested += async (_, _) => await RemoveProfileAsync(card);
+        card.RebuildRequested += async (_, _) => await RunIndexingAsync(card, rebuildFromScratch: true);
+        IndexProfiles.Add(card);
+    }
+
+    /// <summary>
+    /// 发起一次索引任务（新建首次构建 / 用户点击"重建索引"）。这是本类里唯一直接调用
+    /// <see cref="IIndexingService"/> 的地方——持有生命周期较长的 CancellationTokenSource，
+    /// 并把扫描进度通过 <see cref="IProgress{ScanProgress}"/> 实时同步回卡片的进度条/文案。
+    /// </summary>
+    private async Task RunIndexingAsync(IndexProfileCardViewModel card, bool rebuildFromScratch)
+    {
+        string profileId = card.Profile.Id;
+        if (_runningIndexTasks.ContainsKey(profileId))
+        {
+            return; // 已有一个索引任务在跑，不重复发起
+        }
+
+        var cts = new CancellationTokenSource();
+        _runningIndexTasks[profileId] = cts;
+
+        card.Status = IndexStatus.Building;
+        card.IsBuilding = true;
+        card.IsPaused = false;
+        card.BuildProgressPercent = 0;
+        card.BuildProgressText = "准备扫描…";
+
+        var progress = new Progress<ScanProgress>(p =>
+        {
+            card.BuildProgressPercent = p.FilesScanned + p.FilesUnchanged > 0 && card.Profile.FileCount > 0
+                ? Math.Min(100.0, 100.0 * (p.FilesScanned + p.FilesUnchanged) / Math.Max(card.Profile.FileCount, p.FilesScanned + p.FilesUnchanged))
+                : 0;
+            card.BuildProgressText = string.IsNullOrEmpty(p.CurrentPath)
+                ? $"已处理 {p.FilesScanned:N0} 个文件…"
+                : $"正在索引: {System.IO.Path.GetFileName(p.CurrentPath)} ({p.FilesScanned:N0} 已处理)";
+        });
+
+        try
+        {
+            var summary = await _indexingService.RunAsync(
+                card.Profile, rebuildFromScratch, card.PauseController, progress, cts.Token);
+
+            card.Profile.FileCount = summary.FinalDocumentCount;
+            card.Profile.LastUpdatedAt = DateTimeOffset.Now;
+            card.Profile.Status = IndexStatus.Ok;
+            await _profileRepository.SaveAsync(card.Profile, CancellationToken.None);
+
+            card.FileCount = card.Profile.FileCount;
+            card.LastUpdatedAt = card.Profile.LastUpdatedAt;
+            card.Status = IndexStatus.Ok;
+        }
+        catch (OperationCanceledException)
+        {
+            card.Status = IndexStatus.NeedsUpdate;
+        }
+        catch (Exception)
+        {
+            card.Status = IndexStatus.Error;
+        }
+        finally
+        {
+            card.IsBuilding = false;
+            card.IsPaused = false;
+            card.BuildProgressText = null;
+            _runningIndexTasks.Remove(profileId);
+            cts.Dispose();
+        }
     }
 
     [RelayCommand]
@@ -131,12 +207,14 @@ public sealed partial class MainViewModel : ObservableObject
         var created = await _profileRepository.CreateAsync(profile);
 
         var card = new IndexProfileCardViewModel(created);
-        card.RemoveRequested += async (_, _) => await RemoveProfileAsync(card);
-        IndexProfiles.Add(card);
+        AttachCard(card);
         OnPropertyChanged(nameof(HasNoProfiles));
 
         IsNewIndexDialogOpen = false;
         NewIndexDialog = null;
+
+        // 新建索引后立即发起一次首次全量构建，无需用户再手动点"重建索引"。
+        _ = RunIndexingAsync(card, rebuildFromScratch: true);
     }
 
     private async Task RemoveProfileAsync(IndexProfileCardViewModel card)

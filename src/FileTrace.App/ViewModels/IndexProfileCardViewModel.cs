@@ -1,14 +1,20 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using FileTrace.Core.Models;
+using FileTrace.Core.Scanning;
 
 namespace FileTrace.App.ViewModels;
 
 /// <summary>
 /// 左侧"索引管理"抽屉里一张索引卡片的视图模型，对应设计稿 IndexDrawer 的卡片项。
-/// 本类只做展示与命令转发，不直接持有 IndexingCoordinator——
-/// 具体的"暂停/继续/重建/删除"业务逻辑由 Stage3 接入 MainViewModel 时通过事件/服务调用实现，
-/// Stage2 阶段这里的命令先各自置为可执行的占位委托，方便 UI 交互先跑通。
+///
+/// 本类自身不直接调用 IIndexingService——真正发起/取消索引任务的编排逻辑在
+/// <see cref="MainViewModel"/>（它持有 IIndexingService 与生命周期更长的取消令牌）。
+/// 本类只负责：
+///   1) 展示当前状态/进度（由 MainViewModel 在任务运行期间通过 Progress&lt;ScanProgress&gt; 回调更新）；
+///   2) 把"重建/暂停/删除"这几个用户操作以事件形式通知 MainViewModel 去执行；
+///   3) 持有本次运行关联的 <see cref="ScanPauseController"/>，让"暂停"按钮可以直接调用，
+///      不需要每次都经过 MainViewModel 转发（暂停/继续属于纯 UI 交互，不涉及 IO）。
 /// </summary>
 public sealed partial class IndexProfileCardViewModel : ObservableObject
 {
@@ -56,6 +62,16 @@ public sealed partial class IndexProfileCardViewModel : ObservableObject
     [ObservableProperty]
     private string? buildProgressText;
 
+    /// <summary>当前是否处于"已暂停"状态（仅在 IsBuilding 为 true 时有意义）。</summary>
+    [ObservableProperty]
+    private bool isPaused;
+
+    /// <summary>
+    /// 本次运行关联的暂停控制器：MainViewModel 发起 IIndexingService.RunAsync 时会传入这个实例，
+    /// "暂停/继续"按钮可以直接调用它，不需要经过 MainViewModel 转发。
+    /// </summary>
+    public ScanPauseController PauseController { get; } = new();
+
     public string StatusText => Status switch
     {
         IndexStatus.Ok => "可用",
@@ -87,18 +103,35 @@ public sealed partial class IndexProfileCardViewModel : ObservableObject
     [RelayCommand]
     private void TogglePause()
     {
-        // Stage2 占位：真实暂停/继续逻辑将在接入 IndexingCoordinator + ScanPauseController 时实现。
-        IsBuilding = !IsBuilding;
+        // 纯内存态信号，不涉及 IO：直接操作本卡片持有的 PauseController，
+        // 真正阻塞在 WaitIfPaused 上的扫描线程会在下一个文件边界感知到这个状态变化。
+        if (!IsBuilding)
+        {
+            return;
+        }
+
+        if (PauseController.IsPaused)
+        {
+            PauseController.Resume();
+            IsPaused = false;
+        }
+        else
+        {
+            PauseController.Pause();
+            IsPaused = true;
+        }
     }
+
+    /// <summary>
+    /// "重建索引"按钮：把发起索引任务的实际编排逻辑（打开 ManifestStore、调用 IIndexingService、
+    /// 处理取消/异常、任务完成后落盘 profile.json）交给 MainViewModel，本类只负责通知意图。
+    /// </summary>
+    public event EventHandler? RebuildRequested;
 
     [RelayCommand]
     private void Rebuild()
     {
-        // Stage2 占位：将在 Stage3 触发 IndexingCoordinator.RunAsync(rebuildFromScratch: true)。
-        Status = IndexStatus.Building;
-        IsBuilding = true;
-        BuildProgressPercent = 0;
-        BuildProgressText = "准备重建索引…";
+        RebuildRequested?.Invoke(this, EventArgs.Empty);
     }
 
     public event EventHandler? RemoveRequested;
