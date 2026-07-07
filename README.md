@@ -89,6 +89,24 @@ exe 旁边自动创建 `data/` 目录。
 > `Condition="'$(RuntimeIdentifier)' == 'win-x64'"` 限定，只有显式传入 `-r win-x64` 发布时才生效，
 > 不会影响日常 `dotnet build` 的框架依赖式编译。
 
+## 通过 GitHub Actions 自动发布
+
+`.github/workflows/release.yml` 定义了一个在 `windows-latest` runner 上运行的自动发布流程：
+还原依赖 → 跑全部自动化测试 → `dotnet publish -r win-x64 --self-contained true` →
+打包成 zip → 创建 GitHub Release 并上传附件。
+
+触发方式二选一：
+
+1. **打 tag 自动触发**（常规发版流程）：
+   ```bash
+   git tag v1.0.0
+   git push origin v1.0.0
+   ```
+2. **手动触发**（无需先打 tag，在 GitHub 仓库页面 Actions → "Build and Release Windows Portable Exe" →
+   "Run workflow"，填入版本号如 `v1.0.0` 即可）。
+
+发布产物是 `FileTrace-<version>-win-x64.zip`，解压后即为绿色便携版，可在 Release 页面直接下载。
+
 ## 日志与故障排查
 
 程序内置全局异常兜底（UI 线程 `DispatcherUnhandledException` / 后台线程
