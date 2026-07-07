@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using FileTrace.App.Services;
@@ -23,6 +24,7 @@ public sealed partial class MainViewModel : ObservableObject
     private readonly ISearchGateway _searchGateway;
     private readonly IIndexingService _indexingService;
     private readonly IAppLogger _logger;
+    private readonly string _logsDirectory;
     private CancellationTokenSource? _searchCts;
     private readonly Dictionary<string, CancellationTokenSource> _runningIndexTasks = new();
 
@@ -30,12 +32,14 @@ public sealed partial class MainViewModel : ObservableObject
         IIndexProfileRepository profileRepository,
         ISearchGateway searchGateway,
         IIndexingService indexingService,
-        IAppLogger? logger = null)
+        IAppLogger? logger = null,
+        string? logsDirectory = null)
     {
         _profileRepository = profileRepository;
         _searchGateway = searchGateway;
         _indexingService = indexingService;
         _logger = logger ?? NullAppLogger.Instance;
+        _logsDirectory = logsDirectory ?? Path.Combine(AppContext.BaseDirectory, "data", "logs");
 
         IndexProfiles = new ObservableCollection<IndexProfileCardViewModel>();
         SearchResults = new ObservableCollection<SearchResultItemViewModel>();
@@ -91,6 +95,12 @@ public sealed partial class MainViewModel : ObservableObject
 
     [ObservableProperty]
     private NewIndexDialogViewModel? newIndexDialog;
+
+    [ObservableProperty]
+    private bool isAboutDialogOpen;
+
+    [ObservableProperty]
+    private AboutDialogViewModel? aboutDialog;
 
     /// <summary>没有任何索引时的空态提示（区别于"搜索无结果"的空态）。</summary>
     public bool HasNoProfiles => IndexProfiles.Count == 0;
@@ -214,6 +224,23 @@ public sealed partial class MainViewModel : ObservableObject
     {
         IsNewIndexDialogOpen = false;
         NewIndexDialog = null;
+    }
+
+    /// <summary>
+    /// 打开"关于"对话框：展示应用名称/版本号/简介，并提供一键跳转到日志文件夹的入口，
+    /// 方便最终用户在遇到问题时能自助定位并提供诊断信息给开发者。
+    /// </summary>
+    [RelayCommand]
+    private void OpenAboutDialog()
+    {
+        var dialog = new AboutDialogViewModel(_logsDirectory);
+        dialog.CloseRequested += (_, _) =>
+        {
+            IsAboutDialogOpen = false;
+            AboutDialog = null;
+        };
+        AboutDialog = dialog;
+        IsAboutDialogOpen = true;
     }
 
     [RelayCommand]

@@ -10,6 +10,17 @@
     <RootNamespace>FileTrace.App</RootNamespace>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
 
+    <!-- 产品元数据：会打包进 exe 的版本信息资源，Windows 资源管理器"属性→详细信息"标签页可见，
+         也是"关于"对话框里展示版本号的数据来源（通过程序集反射读取，见 AboutDialogViewModel.cs）。 -->
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <Product>寻迹 FileTrace</Product>
+    <Company>FileTrace</Company>
+    <Description>本地文件搜索索引工具：为大容量硬盘建立文件名+全文内容索引，硬盘拔出后仍可离线搜索并定位原路径。</Description>
+    <Copyright>Copyright © FileTrace</Copyright>
+    <NeutralLanguage>zh-CN</NeutralLanguage>
+
     <!--
       本项目在 Windows 上由 Visual Studio / dotnet build 正常编译。
       为了让本项目也能在 Linux 沙箱（无 Windows 桌面工作负载）里通过 `dotnet build` 验证编译，

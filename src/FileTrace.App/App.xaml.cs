@@ -63,7 +63,7 @@ public partial class App : Application
             () => mainViewModelRef?.IndexProfiles.Select(c => c.Profile).ToList()
                 ?? new List<IndexProfile>());
 
-        var mainViewModel = new MainViewModel(profileRepository, searchGateway, indexingService, _logger);
+        var mainViewModel = new MainViewModel(profileRepository, searchGateway, indexingService, _logger, logsDirectory);
         mainViewModelRef = mainViewModel;
 
         var mainWindow = new MainWindow

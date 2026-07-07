@@ -212,5 +212,14 @@
                                       HorizontalAlignment="Center"
                                       VerticalAlignment="Center" />
         </Grid>
+
+        <!-- ===================== 全局遮罩：关于对话框 ===================== -->
+        <Grid Grid.ColumnSpan="2"
+              Background="#66000000"
+              Visibility="{Binding IsAboutDialogOpen, Converter={StaticResource BoolToVis}}">
+            <controls:AboutDialog DataContext="{Binding AboutDialog}"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+        </Grid>
     </Grid>
 </Window>

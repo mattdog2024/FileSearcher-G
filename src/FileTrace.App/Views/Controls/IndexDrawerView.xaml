@@ -23,10 +23,22 @@
 
         <!-- 标题栏 -->
         <Border Grid.Row="0" Padding="16,14" BorderBrush="{StaticResource BorderBrush1}" BorderThickness="0,0,0,1">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Text="寻迹" Style="{StaticResource TextTitleLarge}" Foreground="{StaticResource PrimaryBrush}" />
-                <TextBlock Text=" FileTrace" Style="{StaticResource TextTitleLarge}" Margin="2,0,0,0" />
-            </StackPanel>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Orientation="Horizontal">
+                    <TextBlock Text="寻迹" Style="{StaticResource TextTitleLarge}" Foreground="{StaticResource PrimaryBrush}" />
+                    <TextBlock Text=" FileTrace" Style="{StaticResource TextTitleLarge}" Margin="2,0,0,0" />
+                </StackPanel>
+                <Button Grid.Column="1"
+                        Style="{StaticResource IconButtonStyle}"
+                        Command="{Binding OpenAboutDialogCommand}"
+                        ToolTip="关于寻迹 FileTrace / 版本信息 / 日志">
+                    <TextBlock Text="&#8505;" FontSize="15" Opacity="0.6" />
+                </Button>
+            </Grid>
         </Border>
 
         <!-- 索引卡片列表 -->
