@@ -58,6 +58,17 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!--
+      MainWindow.xaml 通过 Icon="/Assets/app.ico" 使用 WPF pack URI 在运行时加载窗口图标，
+      这要求 app.ico 必须被编译为 WPF 的 Resource 项（打进程序集的资源清单），
+      仅靠上面的 <ApplicationIcon> 只会把它写入 Win32 exe 图标资源（资源管理器/任务栏用），
+      两者是完全独立的机制，缺一个都会导致运行时 XamlParseException:
+      "找不到资源 assets/app.ico"。
+    -->
+    <Resource Include="Assets\app.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\FileTrace.Core\FileTrace.Core.csproj" />
     <ProjectReference Include="..\FileTrace.App.Services\FileTrace.App.Services.csproj" />
   </ItemGroup>
