@@ -71,18 +71,41 @@ public sealed class ScanProgress
 public sealed class ScanPauseController
 {
     private readonly ManualResetEventSlim _resumeGate = new(initialState: true);
+    private readonly System.Diagnostics.Stopwatch _currentPauseStopwatch = new();
+    private TimeSpan _accumulatedPauseDuration = TimeSpan.Zero;
 
     public bool IsPaused { get; private set; }
 
+    /// <summary>
+    /// 自任务开始以来累计的"暂停时长"（不含当前若仍处于暂停中的这一段未结束的时间也会被计入，
+    /// 见下方 getter 实现）。用于 UI 层计算"已用时"时把暂停期间排除掉——暂停时用户可能长时间
+    /// 不操作，如果把这段时间也计入"已用时"，会导致"处理速度""预计剩余时间"被严重低估/夸大。
+    /// </summary>
+    public TimeSpan TotalPausedDuration =>
+        _accumulatedPauseDuration + (_currentPauseStopwatch.IsRunning ? _currentPauseStopwatch.Elapsed : TimeSpan.Zero);
+
     public void Pause()
     {
+        if (IsPaused)
+        {
+            return;
+        }
+
         IsPaused = true;
+        _currentPauseStopwatch.Restart();
         _resumeGate.Reset();
     }
 
     public void Resume()
     {
+        if (!IsPaused)
+        {
+            return;
+        }
+
         IsPaused = false;
+        _currentPauseStopwatch.Stop();
+        _accumulatedPauseDuration += _currentPauseStopwatch.Elapsed;
         _resumeGate.Set();
     }
 
@@ -93,5 +116,19 @@ public sealed class ScanPauseController
     public void WaitIfPaused(CancellationToken cancellationToken)
     {
         _resumeGate.Wait(cancellationToken);
+    }
+
+    /// <summary>
+    /// 清空累计暂停时长与暂停状态，供每次发起新的索引任务（新建/重建）前调用——
+    /// 同一张索引卡片在其生命周期内只持有一个 ScanPauseController 实例（会被复用于
+    /// 多次"重建索引"操作），如果不重置，上一次构建遗留的暂停时长会污染这一次的
+    /// "已用时/预计剩余时间"计算。
+    /// </summary>
+    public void Reset()
+    {
+        IsPaused = false;
+        _currentPauseStopwatch.Reset();
+        _accumulatedPauseDuration = TimeSpan.Zero;
+        _resumeGate.Set();
     }
 }

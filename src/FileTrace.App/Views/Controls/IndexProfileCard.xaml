@@ -53,7 +53,7 @@
                        Style="{StaticResource TextMicro}"
                        Margin="0,4,0,0" />
 
-            <!-- 构建进度条（仅 IsBuilding 时显示） -->
+            <!-- 构建进度条 + 详情信息框（仅 IsBuilding 时显示） -->
             <StackPanel Margin="0,8,0,0" Visibility="{Binding IsBuilding, Converter={StaticResource BoolToVis}}">
                 <ProgressBar Height="4"
                              Minimum="0" Maximum="100"
@@ -66,6 +66,39 @@
                            Style="{StaticResource TextMicro}"
                            Margin="0,4,0,0"
                            TextTrimming="CharacterEllipsis" />
+
+                <!-- 详情信息框：已用时 / 预计剩余时间 / 处理速度 / 分类统计，
+                     独立的浅色卡片承载，避免和上面单行的"当前文件"文案混在一起看不清。 -->
+                <Border Background="{StaticResource SurfaceAltBrush}"
+                        BorderBrush="{StaticResource DividerBrush}"
+                        BorderThickness="1"
+                        CornerRadius="6"
+                        Padding="8,6"
+                        Margin="0,8,0,0">
+                    <StackPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0"
+                                       Text="{Binding ElapsedTimeDisplay}"
+                                       Style="{StaticResource TextMicro}" />
+                            <TextBlock Grid.Column="1"
+                                       Text="{Binding EstimatedRemainingDisplay}"
+                                       Style="{StaticResource TextMicro}"
+                                       HorizontalAlignment="Right"
+                                       TextTrimming="CharacterEllipsis" />
+                        </Grid>
+                        <TextBlock Text="{Binding ProcessingSpeedDisplay}"
+                                   Style="{StaticResource TextMicro}"
+                                   Margin="0,4,0,0" />
+                        <TextBlock Text="{Binding BuildStatsDisplay}"
+                                   Style="{StaticResource TextMicro}"
+                                   Margin="0,4,0,0"
+                                   TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                </Border>
             </StackPanel>
 
             <!-- 操作按钮行 -->

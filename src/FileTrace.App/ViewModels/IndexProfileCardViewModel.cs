@@ -63,6 +63,29 @@ public sealed partial class IndexProfileCardViewModel : ObservableObject
     private string? buildProgressText;
 
     /// <summary>
+    /// 详情信息框——已用时文案，例如"已用时 2分15秒"。由 MainViewModel 在进度回调里
+    /// 根据任务开始时刻的 Stopwatch 计算并格式化好后直接赋值，本类不负责计时逻辑，
+    /// 只负责展示（与 BuildProgressText 保持同样的职责划分）。
+    /// </summary>
+    [ObservableProperty]
+    private string? elapsedTimeDisplay;
+
+    /// <summary>
+    /// 详情信息框——预计剩余时间文案，例如"预计剩余 5分30秒"。
+    /// 全新索引（总文件数未知）时没有基准可以估算，展示"总量未知，无法估算"。
+    /// </summary>
+    [ObservableProperty]
+    private string? estimatedRemainingDisplay;
+
+    /// <summary>详情信息框——处理速度文案，例如"18.3 个/秒 · 4.2 MB/秒"。</summary>
+    [ObservableProperty]
+    private string? processingSpeedDisplay;
+
+    /// <summary>详情信息框——分类统计文案，例如"已索引 1,204 · 跳过 320 · 失败 2"。</summary>
+    [ObservableProperty]
+    private string? buildStatsDisplay;
+
+    /// <summary>
     /// 构建进度条是否处于"不确定"模式（滚动动画，而非精确百分比）。
     /// 首次构建一个全新索引时，事先并不知道总文件数（<see cref="IndexProfile.FileCount"/> 为 0），
     /// 此时用"不确定进度"动画告知用户"正在工作中"，避免进度条一直卡在 0% 让用户误以为程序卡死；

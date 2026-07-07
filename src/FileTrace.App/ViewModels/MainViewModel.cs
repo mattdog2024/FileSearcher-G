@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -160,12 +161,24 @@ public sealed partial class MainViewModel : ObservableObject
         long knownTotalFileCount = card.Profile.FileCount;
         bool hasKnownTotal = knownTotalFileCount > 0;
 
+        // 同一张卡片的 PauseController 会跨多次"重建索引"操作被复用，必须先清空上一次
+        // 遗留的暂停状态/累计暂停时长，否则这一次的"已用时/预计剩余时间"计算会被污染。
+        card.PauseController.Reset();
+
+        // 详情信息框（已用时/预计剩余时间/处理速度）依赖的计时起点：用 Stopwatch 而不是
+        // DateTimeOffset.Now 相减，避免系统时钟被用户/NTP 调整时导致耗时计算异常。
+        var stopwatch = Stopwatch.StartNew();
+
         card.Status = IndexStatus.Building;
         card.IsBuilding = true;
         card.IsPaused = false;
         card.IsProgressIndeterminate = !hasKnownTotal;
         card.BuildProgressPercent = 0;
         card.BuildProgressText = "准备扫描…";
+        card.ElapsedTimeDisplay = "已用时 0 秒";
+        card.EstimatedRemainingDisplay = hasKnownTotal ? "预计剩余 计算中…" : "总量未知，暂无法估算剩余时间";
+        card.ProcessingSpeedDisplay = "0 个/秒";
+        card.BuildStatsDisplay = "已索引 0 · 跳过 0 · 失败 0 · 删除 0";
 
         var progress = new Progress<ScanProgress>(p =>
         {
@@ -188,6 +201,39 @@ public sealed partial class MainViewModel : ObservableObject
             card.BuildProgressText = string.IsNullOrEmpty(p.CurrentPath)
                 ? $"已处理 {processed:N0} 个文件 · {sizeText}"
                 : $"正在索引: {System.IO.Path.GetFileName(p.CurrentPath)}（已处理 {processed:N0} 个 · {sizeText}）";
+
+            // 有效耗时 = 挂钟耗时 - 累计暂停时长，避免用户长时间暂停期间的"死时间"
+            // 拉低算出来的处理速度、抬高预计剩余时间的误差。
+            TimeSpan effectiveElapsed = stopwatch.Elapsed - card.PauseController.TotalPausedDuration;
+            if (effectiveElapsed < TimeSpan.Zero)
+            {
+                effectiveElapsed = TimeSpan.Zero;
+            }
+
+            card.ElapsedTimeDisplay = $"已用时 {FormatDuration(stopwatch.Elapsed)}";
+
+            double effectiveSeconds = effectiveElapsed.TotalSeconds;
+            if (effectiveSeconds >= 1 && processed > 0)
+            {
+                double filesPerSecond = processed / effectiveSeconds;
+                double bytesPerSecond = p.BytesProcessed / effectiveSeconds;
+                card.ProcessingSpeedDisplay =
+                    $"{filesPerSecond:N1} 个/秒 · {FormatBytesForProgress((long)bytesPerSecond)}/秒";
+
+                if (hasKnownTotal && filesPerSecond > 0)
+                {
+                    long remaining = Math.Max(0, knownTotalFileCount - processed);
+                    var eta = TimeSpan.FromSeconds(remaining / filesPerSecond);
+                    card.EstimatedRemainingDisplay = $"预计剩余 {FormatDuration(eta)}";
+                }
+            }
+            else if (!hasKnownTotal)
+            {
+                card.EstimatedRemainingDisplay = "总量未知，暂无法估算剩余时间";
+            }
+
+            card.BuildStatsDisplay =
+                $"已索引 {p.FilesIndexed:N0} · 跳过 {p.FilesUnchanged:N0} · 失败 {p.FilesFailed:N0} · 删除 {p.FilesRemoved:N0}";
         });
 
         try
@@ -219,10 +265,15 @@ public sealed partial class MainViewModel : ObservableObject
         }
         finally
         {
+            stopwatch.Stop();
             card.IsBuilding = false;
             card.IsPaused = false;
             card.IsProgressIndeterminate = false;
             card.BuildProgressText = null;
+            card.ElapsedTimeDisplay = null;
+            card.EstimatedRemainingDisplay = null;
+            card.ProcessingSpeedDisplay = null;
+            card.BuildStatsDisplay = null;
             _runningIndexTasks.Remove(profileId);
             cts.Dispose();
         }
@@ -242,6 +293,30 @@ public sealed partial class MainViewModel : ObservableObject
         return unitIndex == 0
             ? $"{size:N0} {units[unitIndex]}"
             : $"{size:N1} {units[unitIndex]}";
+    }
+
+    /// <summary>
+    /// 把 TimeSpan 格式化成中文友好的"已用时/预计剩余"文案：
+    /// 小于1分钟只显示秒；小于1小时显示"X分Y秒"；否则显示"X时Y分"。
+    /// </summary>
+    private static string FormatDuration(TimeSpan duration)
+    {
+        if (duration < TimeSpan.Zero)
+        {
+            duration = TimeSpan.Zero;
+        }
+
+        if (duration.TotalHours >= 1)
+        {
+            return $"{(int)duration.TotalHours} 时 {duration.Minutes} 分";
+        }
+
+        if (duration.TotalMinutes >= 1)
+        {
+            return $"{(int)duration.TotalMinutes} 分 {duration.Seconds} 秒";
+        }
+
+        return $"{Math.Max(1, duration.Seconds)} 秒";
     }
 
     [RelayCommand]

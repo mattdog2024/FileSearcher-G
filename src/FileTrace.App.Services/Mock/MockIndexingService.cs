@@ -30,6 +30,7 @@ public sealed class MockIndexingService : IIndexingService
 
             state.FilesScanned = i;
             state.FilesIndexed = i;
+            state.BytesProcessed += 256 * 1024; // 假装每个文件 256KB，驱动"处理速度"文案联调
             state.CurrentPath = Path.Combine(profile.RootPath, $"示例文件_{i:D3}.docx");
             progress?.Report(state);
         }
