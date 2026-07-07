@@ -62,6 +62,15 @@ public sealed partial class IndexProfileCardViewModel : ObservableObject
     [ObservableProperty]
     private string? buildProgressText;
 
+    /// <summary>
+    /// 构建进度条是否处于"不确定"模式（滚动动画，而非精确百分比）。
+    /// 首次构建一个全新索引时，事先并不知道总文件数（<see cref="IndexProfile.FileCount"/> 为 0），
+    /// 此时用"不确定进度"动画告知用户"正在工作中"，避免进度条一直卡在 0% 让用户误以为程序卡死；
+    /// 增量更新/重建索引时已经有上一次构建留下的总数估计，可以切换回精确百分比模式。
+    /// </summary>
+    [ObservableProperty]
+    private bool isProgressIndeterminate;
+
     /// <summary>当前是否处于"已暂停"状态（仅在 IsBuilding 为 true 时有意义）。</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(PauseButtonLabel))]

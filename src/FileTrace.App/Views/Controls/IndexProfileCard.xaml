@@ -58,6 +58,7 @@
                 <ProgressBar Height="4"
                              Minimum="0" Maximum="100"
                              Value="{Binding BuildProgressPercent, Mode=OneWay}"
+                             IsIndeterminate="{Binding IsProgressIndeterminate}"
                              Background="{StaticResource DividerBrush}"
                              Foreground="{StaticResource PrimaryBrush}"
                              BorderThickness="0" />

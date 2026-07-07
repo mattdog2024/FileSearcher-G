@@ -153,20 +153,41 @@ public sealed partial class MainViewModel : ObservableObject
         var cts = new CancellationTokenSource();
         _runningIndexTasks[profileId] = cts;
 
+        // 已知本次构建前的总文件数（例如"重建索引"针对一个之前已经构建过的索引）时，
+        // 才有意义展示精确百分比；全新索引首次构建时 card.Profile.FileCount 恒为 0，
+        // 这种情况下改用"不确定进度"动画（滚动条），并配合已处理文件数/字节数文案，
+        // 避免进度条永远停在 0% 让用户误以为程序卡死。
+        long knownTotalFileCount = card.Profile.FileCount;
+        bool hasKnownTotal = knownTotalFileCount > 0;
+
         card.Status = IndexStatus.Building;
         card.IsBuilding = true;
         card.IsPaused = false;
+        card.IsProgressIndeterminate = !hasKnownTotal;
         card.BuildProgressPercent = 0;
         card.BuildProgressText = "准备扫描…";
 
         var progress = new Progress<ScanProgress>(p =>
         {
-            card.BuildProgressPercent = p.FilesScanned + p.FilesUnchanged > 0 && card.Profile.FileCount > 0
-                ? Math.Min(100.0, 100.0 * (p.FilesScanned + p.FilesUnchanged) / Math.Max(card.Profile.FileCount, p.FilesScanned + p.FilesUnchanged))
-                : 0;
+            long processed = p.FilesScanned + p.FilesUnchanged;
+
+            if (hasKnownTotal)
+            {
+                card.IsProgressIndeterminate = false;
+                card.BuildProgressPercent = Math.Min(
+                    100.0,
+                    100.0 * processed / Math.Max(knownTotalFileCount, processed));
+            }
+            else
+            {
+                // 总数未知：保持不确定进度动画，百分比字段不参与展示。
+                card.IsProgressIndeterminate = true;
+            }
+
+            string sizeText = FormatBytesForProgress(p.BytesProcessed);
             card.BuildProgressText = string.IsNullOrEmpty(p.CurrentPath)
-                ? $"已处理 {p.FilesScanned:N0} 个文件…"
-                : $"正在索引: {System.IO.Path.GetFileName(p.CurrentPath)} ({p.FilesScanned:N0} 已处理)";
+                ? $"已处理 {processed:N0} 个文件 · {sizeText}"
+                : $"正在索引: {System.IO.Path.GetFileName(p.CurrentPath)}（已处理 {processed:N0} 个 · {sizeText}）";
         });
 
         try
@@ -200,10 +221,27 @@ public sealed partial class MainViewModel : ObservableObject
         {
             card.IsBuilding = false;
             card.IsPaused = false;
+            card.IsProgressIndeterminate = false;
             card.BuildProgressText = null;
             _runningIndexTasks.Remove(profileId);
             cts.Dispose();
         }
+    }
+
+    private static string FormatBytesForProgress(long bytes)
+    {
+        string[] units = { "B", "KB", "MB", "GB", "TB" };
+        double size = bytes;
+        int unitIndex = 0;
+        while (size >= 1024 && unitIndex < units.Length - 1)
+        {
+            size /= 1024;
+            unitIndex++;
+        }
+
+        return unitIndex == 0
+            ? $"{size:N0} {units[unitIndex]}"
+            : $"{size:N1} {units[unitIndex]}";
     }
 
     [RelayCommand]
