@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using FileTrace.App.Services;
+using FileTrace.App.Services.Logging;
 using FileTrace.Core.Models;
 using FileTrace.Core.Scanning;
 using FileTrace.Core.Search;
@@ -21,17 +22,20 @@ public sealed partial class MainViewModel : ObservableObject
     private readonly IIndexProfileRepository _profileRepository;
     private readonly ISearchGateway _searchGateway;
     private readonly IIndexingService _indexingService;
+    private readonly IAppLogger _logger;
     private CancellationTokenSource? _searchCts;
     private readonly Dictionary<string, CancellationTokenSource> _runningIndexTasks = new();
 
     public MainViewModel(
         IIndexProfileRepository profileRepository,
         ISearchGateway searchGateway,
-        IIndexingService indexingService)
+        IIndexingService indexingService,
+        IAppLogger? logger = null)
     {
         _profileRepository = profileRepository;
         _searchGateway = searchGateway;
         _indexingService = indexingService;
+        _logger = logger ?? NullAppLogger.Instance;
 
         IndexProfiles = new ObservableCollection<IndexProfileCardViewModel>();
         SearchResults = new ObservableCollection<SearchResultItemViewModel>();
@@ -95,13 +99,25 @@ public sealed partial class MainViewModel : ObservableObject
 
     public async Task InitializeAsync()
     {
-        var profiles = await _profileRepository.GetAllAsync();
-        IndexProfiles.Clear();
-        foreach (var p in profiles)
+        try
         {
-            AttachCard(new IndexProfileCardViewModel(p));
+            var profiles = await _profileRepository.GetAllAsync();
+            IndexProfiles.Clear();
+            foreach (var p in profiles)
+            {
+                AttachCard(new IndexProfileCardViewModel(p));
+            }
+            OnPropertyChanged(nameof(HasNoProfiles));
+            _logger.LogInfo($"启动加载完成，共 {profiles.Count} 个索引配置。");
         }
-        OnPropertyChanged(nameof(HasNoProfiles));
+        catch (Exception ex)
+        {
+            // 注册表/profile.json 全部读取失败是一个相对极端的场景（例如 data 目录被外部程序
+            // 破坏性写坏）；不能让应用直接白屏或崩溃——保留一个空的索引列表让用户至少可以
+            // 重新新建索引，同时把详细异常写入日志文件供排查。
+            _logger.LogError("启动时加载索引列表失败。", ex);
+            StatusMessage = "加载已有索引列表时出现问题，已尝试跳过异常项。详情见 data/logs 日志。";
+        }
     }
 
     private void AttachCard(IndexProfileCardViewModel card)
@@ -156,14 +172,19 @@ public sealed partial class MainViewModel : ObservableObject
             card.FileCount = card.Profile.FileCount;
             card.LastUpdatedAt = card.Profile.LastUpdatedAt;
             card.Status = IndexStatus.Ok;
+            _logger.LogInfo(
+                $"索引构建完成: {card.Profile.Name} ({card.Profile.RootPath})，共 {summary.FinalDocumentCount:N0} 个文件，" +
+                $"新增 {summary.Added}，更新 {summary.Updated}，删除 {summary.Removed}，失败 {summary.Failed}。");
         }
         catch (OperationCanceledException)
         {
             card.Status = IndexStatus.NeedsUpdate;
+            _logger.LogInfo($"索引构建被取消: {card.Profile.Name} ({card.Profile.RootPath})。");
         }
-        catch (Exception)
+        catch (Exception ex)
         {
             card.Status = IndexStatus.Error;
+            _logger.LogError($"索引构建失败: {card.Profile.Name} ({card.Profile.RootPath})。", ex);
         }
         finally
         {
@@ -219,9 +240,18 @@ public sealed partial class MainViewModel : ObservableObject
 
     private async Task RemoveProfileAsync(IndexProfileCardViewModel card)
     {
-        await _profileRepository.DeleteAsync(card.Profile.Id);
-        IndexProfiles.Remove(card);
-        OnPropertyChanged(nameof(HasNoProfiles));
+        try
+        {
+            await _profileRepository.DeleteAsync(card.Profile.Id);
+            IndexProfiles.Remove(card);
+            OnPropertyChanged(nameof(HasNoProfiles));
+            _logger.LogInfo($"已删除索引: {card.Profile.Name} ({card.Profile.RootPath})。");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError($"删除索引失败: {card.Profile.Name} ({card.Profile.RootPath})。", ex);
+            StatusMessage = "删除索引时出现问题，详情见 data/logs 日志。";
+        }
     }
 
     private void SelectFilterChip(FilterChipViewModel selected)
@@ -284,6 +314,11 @@ public sealed partial class MainViewModel : ObservableObject
         catch (OperationCanceledException)
         {
             // 新的搜索请求已发出，忽略被取消的旧请求。
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError($"搜索失败，关键词: {QueryText}", ex);
+            StatusMessage = "搜索时发生错误，请重试。详情见 data/logs 日志。";
         }
         finally
         {

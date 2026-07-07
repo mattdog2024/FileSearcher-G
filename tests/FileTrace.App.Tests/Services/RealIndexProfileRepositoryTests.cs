@@ -109,4 +109,37 @@ public class RealIndexProfileRepositoryTests : IDisposable
         var reloaded = Assert.Single(await repo2.GetAllAsync());
         Assert.Equal("改名后的索引", reloaded.Name);
     }
+
+    [Fact]
+    public async Task GetAllAsync_OrphanRegistryEntry_IsSelfHealedOnNextLoad()
+    {
+        var repo = new RealIndexProfileRepository(RegistryPath);
+        string rootPath = Path.Combine(_temp.Path, "source5");
+        Directory.CreateDirectory(rootPath);
+        string storagePath = Path.Combine(_temp.Path, "storage5");
+
+        await repo.CreateAsync(new IndexProfile
+        {
+            Name = "即将变孤儿的索引",
+            RootPath = rootPath,
+            StoragePath = storagePath,
+        });
+
+        // 模拟用户手动删除了整个索引存储目录（但没有走应用内的"删除索引"操作，
+        // 所以注册表里还残留着这个已经不存在的 StoragePath）。
+        Directory.Delete(storagePath, recursive: true);
+
+        var all = await repo.GetAllAsync();
+        Assert.Empty(all);
+
+        // 第一次 GetAllAsync 应该已经把这个孤儿条目从注册表里清理掉了；
+        // 用一个全新的仓库实例重新加载，验证注册表确实不会再尝试加载这个失效路径
+        // （否则每次启动都会重复触发一次无意义的"加载失败"路径）。
+        string registryContent = await File.ReadAllTextAsync(RegistryPath);
+        Assert.DoesNotContain(storagePath, registryContent);
+
+        var repo2 = new RealIndexProfileRepository(RegistryPath);
+        var reloadedAll = await repo2.GetAllAsync();
+        Assert.Empty(reloadedAll);
+    }
 }

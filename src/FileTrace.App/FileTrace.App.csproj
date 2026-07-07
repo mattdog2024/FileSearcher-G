@@ -6,9 +6,9 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
-    <ApplicationIcon></ApplicationIcon>
     <AssemblyName>FileTrace</AssemblyName>
     <RootNamespace>FileTrace.App</RootNamespace>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
 
     <!--
       本项目在 Windows 上由 Visual Studio / dotnet build 正常编译。
@@ -19,9 +19,27 @@
     -->
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
 
-    <!-- 便携版单文件自包含发布相关设置，Stage4 打包时会用到，这里先占位声明 -->
+    <!--
+      Stage4 便携版打包设置。这里刻意不能把 SelfContained/PublishSingleFile 写成固定的
+      无条件 true——一旦这样写，即使只是普通的 `dotnet build`（不带 -r），SDK 也会尝试
+      为当前机器的 RuntimeIdentifier 解析自包含运行时包；在本 Linux 沙箱里当前 RID 是
+      linux-x64，而 WPF 只有 win-x64 的运行时包，会直接导致 build 失败（NETSDK1082）。
+      所以固定只声明支持的 RuntimeIdentifiers 列表，真正的"自包含单文件"通过下面
+      Condition 限定：只有显式传入 -r win-x64（发布 Windows 便携版时）才会生效，
+      日常在 Linux 沙箱里验证编译的 `dotnet build`/`dotnet build FileTrace.sln`
+      不受影响，继续按框架依赖方式解析。
+
+      实际发布命令（在 Windows/CI 上执行）：
+        dotnet publish src/FileTrace.App/FileTrace.App.csproj -c Release -r win-x64
+      产物：src/FileTrace.App/bin/Release/net8.0-windows/win-x64/publish/FileTrace.exe
+      （单文件、自包含、免装 .NET 运行时，符合"绿色版/免安装"要求）。
+    -->
     <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
-    <SelfContained>false</SelfContained>
+    <SelfContained Condition="'$(RuntimeIdentifier)' == 'win-x64'">true</SelfContained>
+    <PublishSingleFile Condition="'$(RuntimeIdentifier)' == 'win-x64'">true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract Condition="'$(RuntimeIdentifier)' == 'win-x64'">true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile Condition="'$(RuntimeIdentifier)' == 'win-x64'">true</EnableCompressionInSingleFile>
+    <!-- 便携版不需要用户机器预装 ICU 等额外系统组件，保持默认的 invariant=false 即可正常处理中文文件名/内容。 -->
   </PropertyGroup>
 
   <ItemGroup>
