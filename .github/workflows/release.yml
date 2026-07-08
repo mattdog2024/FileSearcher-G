@@ -1,0 +1,171 @@
+name: Build and Release Windows Portable Exe
+
+# 触发方式：
+#   1) 推送形如 v1.0.0 的 tag —— 自动构建并发布对应版本号的 Release（最常规的发版流程）。
+#   2) 手动触发（Actions 页面 "Run workflow"）—— 无需先打 tag，
+#      填写一个版本号即可立即构建并发布，方便临时验证发布流程或补发同一版本。
+#
+# 产物：src/FileTrace.App 的 win-x64 单文件自包含发布版（免安装 .NET 运行时），
+# 打包成 FileTrace-<version>-win-x64.zip 并作为 GitHub Release 附件上传。
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "发布版本号（例如 v1.0.0），手动触发时必填"
+        required: true
+        default: "v1.0.0"
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Restore
+        run: dotnet restore FileTrace.sln
+
+      - name: Run automated tests
+        run: dotnet test FileTrace.sln --configuration Release --no-restore --verbosity normal
+
+      - name: Determine release version
+        id: version
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            raw="${{ github.event.inputs.version }}"
+          else
+            raw="${GITHUB_REF_NAME}"
+          fi
+          # tag_name 沿用原始（含 v），zip_name 剥掉前缀 v 显得整洁
+          echo "version=$raw" >> "$GITHUB_OUTPUT"
+          zip_raw="${raw#v}"
+          echo "zip_basename=FileTrace-${zip_raw}-win-x64" >> "$GITHUB_OUTPUT"
+
+      - name: Publish win-x64 portable build
+        run: >-
+          dotnet publish src/FileTrace.App/FileTrace.App.csproj
+          -c Release
+          -r win-x64
+          --self-contained true
+          -o publish/FileTrace
+          /p:DebugType=embedded
+
+      # --------------------------------------------------------------------
+      # jieba.NET 词典完整性兜底
+      # --------------------------------------------------------------------
+      # 已知问题：在某些 .NET SDK 版本组合下，单文件发布（PublishSingleFile=true +
+      # IncludeNativeLibrariesForSelfExtract=true）对 <None Include="$(NuGetPackageRoot)\jieba.net\...">
+      # 这种以 PreserveNewest 拷贝的 Content 项可能会"先复制后删除"，导致 publish 输出
+      # 的 Resources/ 文件夹意外缺失 5/10 个词典文件（我们已经把根因修复放在 FileTraceAnalyzer
+      # 兜底逻辑里，但发布后用户下载的便携版仍然要求这些文件存在）。
+      # 这里用一个幂等的"补齐兜底"步骤：比对 NuGet 缓存里的 jieba 词典包与 publish/Resources/，
+      # 把缺失的文件补回去；Windows runner 上 NuGet 包路径是 $HOME\.nuget\packages\jieba.net\0.42.2\Resources\。
+      - name: Verify & repair jieba dictionary Resources
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $expected = @(
+            'char_state_tab.json',
+            'cn_synonym.txt',
+            'dict.txt',
+            'idf.txt',
+            'pos_prob_emit.json',
+            'pos_prob_start.json',
+            'pos_prob_trans.json',
+            'prob_emit.json',
+            'prob_trans.json',
+            'stopwords.txt'
+          )
+          $dest = Join-Path 'publish/FileTrace' 'Resources'
+          if (-not (Test-Path $dest)) { New-Item -ItemType Directory -Path $dest | Out-Null }
+
+          # 通过 dotnet nuget locals 实际询问 SDK 默认全局包路径
+          $nugetRootFromSdk = & dotnet nuget locals global-packages --list | ForEach-Object {
+            if ($_ -match 'global-packages:\s*(.+)$') { $Matches[1].Trim() }
+          } | Select-Object -First 1
+          # 兜底：Windows runner 默认 USERPROFILE/.nuget/packages/jieba.net/0.42.2/Resources
+          $nugetRootDefault = Join-Path $env:USERPROFILE '.nuget\packages\jieba.net\0.42.2\Resources'
+          $nugetRoot = if ($nugetRootFromSdk) { Join-Path $nugetRootFromSdk 'jieba.net\0.42.2\Resources' } else { $nugetRootDefault }
+
+          Write-Host "NuGet jieba Resources folder: $nugetRoot"
+          if (-not (Test-Path $nugetRoot)) {
+            throw "NuGet jieba Resources folder not found: $nugetRoot. Restore step did not populate it."
+          }
+
+          $missing = @()
+          foreach ($f in $expected) {
+            $src = Join-Path $nugetRoot $f
+            $dstFile = Join-Path $dest $f
+            if (-not (Test-Path $dstFile)) {
+              Write-Host "MISSING: $dstFile -- copying from $src"
+              Copy-Item -Path $src -Destination $dstFile -Force
+              $missing += $f
+            }
+          }
+          if ($missing.Count -gt 0) {
+            Write-Host "Repaired $($missing.Count) missing dictionary file(s): $($missing -join ', ')"
+          } else {
+            Write-Host "All jieba dictionary files already present in publish/Resources/ -- no repair needed."
+          }
+
+          # 最终位图校验：必须全部 10 个齐备，否则 fail 让 workflow 红牌
+          $stillMissing = @()
+          foreach ($f in $expected) {
+            if (-not (Test-Path (Join-Path $dest $f))) { $stillMissing += $f }
+          }
+          if ($stillMissing.Count -gt 0) {
+            throw "After repair attempt, still missing: $($stillMissing -join ', '). Check NuGet package layout."
+          }
+
+          Get-ChildItem $dest | Select-Object Name, Length | Format-Table | Out-String | Write-Host
+
+      - name: Package portable zip
+        shell: pwsh
+        run: |
+          $zipName = "${{ steps.version.outputs.zip_basename }}.zip"
+          if (Test-Path $zipName) { Remove-Item $zipName -Force }
+          Compress-Archive -Path "publish/FileTrace/*" -DestinationPath $zipName -CompressionLevel Optimal
+          $size = (Get-Item $zipName).Length
+          $hash = (Get-FileHash $zipName -Algorithm SHA256).Hash
+          # GITHUB_ENV 要求 UTF-8 无 BOM（Out-File -Encoding utf8 在 PS 7+ 会带 BOM，不行）
+          [IO.File]::AppendAllText($env:GITHUB_ENV, "ZIP_NAME=$zipName`n", [Text.UTF8Encoding]::new($false))
+          [IO.File]::AppendAllText($env:GITHUB_ENV, "ZIP_SIZE=$size`n", [Text.UTF8Encoding]::new($false))
+          [IO.File]::AppendAllText($env:GITHUB_ENV, "ZIP_SHA256=$hash`n", [Text.UTF8Encoding]::new($false))
+          Write-Host "Built $zipName ($size bytes)"
+          Write-Host "SHA256: $hash"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: "寻迹 FileTrace ${{ steps.version.outputs.version }}"
+          body: |
+            寻迹 FileTrace 便携版（Windows x64，绿色免安装）。
+
+            ## 使用方法
+            1. 下载并解压附件中的 zip（文件名形如 `FileTrace-1.0.1-win-x64.zip`）
+            2. 双击 `FileTrace.exe` 直接运行，无需安装 .NET 运行时
+            3. 首次运行会在 exe 旁边自动创建 `data/` 目录，用于保存索引注册表与日志
+
+            ## 校验信息
+            - 文件大小：`${{ env.ZIP_SIZE }}` 字节
+            - SHA256：`${{ env.ZIP_SHA256 }}`
+
+            详细说明见仓库根目录 [README.md](https://github.com/${{ github.repository }}/blob/main/README.md)。
+          files: ${{ env.ZIP_NAME }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
