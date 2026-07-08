@@ -29,4 +29,11 @@
     </None>
   </ItemGroup>
 
+  <!-- 暴露 internal 成员给同解决方案下的单元测试项目（包括 jieba 词典目录解析的
+       可测试 hook，例如 JiebaResourceResolver.TestCandidateRootOverride），
+       避免为了测试而把这些 API 提升为 public。-->
+  <ItemGroup>
+    <InternalsVisibleTo Include="FileTrace.Core.Tests" />
+  </ItemGroup>
+
 </Project>
