@@ -1,0 +1,225 @@
+<Window x:Class="FileTrace.App.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="clr-namespace:FileTrace.App.ViewModels"
+        xmlns:controls="clr-namespace:FileTrace.App.Views.Controls"
+        xmlns:conv="clr-namespace:FileTrace.App.Converters"
+        mc:Ignorable="d"
+        Title="寻迹 FileTrace"
+        Icon="/Assets/app.ico"
+        Height="800" Width="1280"
+        MinHeight="600" MinWidth="960"
+        Background="{StaticResource AppBackgroundBrush}"
+        FontFamily="{StaticResource AppFontFamily}"
+        d:DataContext="{d:DesignInstance Type=vm:MainViewModel}">
+
+    <Window.Resources>
+        <conv:BoolToVisibilityConverter x:Key="BoolToVis" />
+    </Window.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <!-- ===================== 左侧：索引管理抽屉 IndexDrawer ===================== -->
+        <Border Grid.Column="0"
+                Width="300"
+                Background="{StaticResource SurfaceBrush}"
+                BorderBrush="{StaticResource BorderBrush1}"
+                BorderThickness="0,0,1,0"
+                Visibility="{Binding IsIndexDrawerOpen, Converter={StaticResource BoolToVis}}">
+            <controls:IndexDrawerView />
+        </Border>
+
+        <!-- ===================== 右侧：主工作区 ===================== -->
+        <Grid Grid.Column="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <!-- 顶部工具条：抽屉开关 + 搜索框 -->
+            <Border Grid.Row="0"
+                    Background="{StaticResource SurfaceBrush}"
+                    BorderBrush="{StaticResource BorderBrush1}"
+                    BorderThickness="0,0,0,1"
+                    Padding="16,12">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <Button Grid.Column="0"
+                            Style="{StaticResource IconButtonStyle}"
+                            Command="{Binding ToggleIndexDrawerCommand}"
+                            ToolTip="显示/隐藏索引管理面板"
+                            Margin="0,0,12,0">
+                        <TextBlock Text="&#9776;" FontSize="16" />
+                    </Button>
+
+                    <Border Grid.Column="1"
+                            Background="{StaticResource SurfaceAltBrush}"
+                            BorderBrush="{StaticResource BorderStrongBrush}"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="12,0">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock Grid.Column="0"
+                                       Text="&#128269;"
+                                       FontSize="14"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,8,0"
+                                       Opacity="0.6" />
+
+                            <TextBox Grid.Column="1"
+                                     x:Name="SearchBox"
+                                     Style="{StaticResource SearchTextBoxStyle}"
+                                     Height="40"
+                                     Text="{Binding QueryText, UpdateSourceTrigger=PropertyChanged}"
+                                     ToolTip="支持 &quot;精确短语&quot; / -排除词 / *通配符 / filename: content: 前缀">
+                                <TextBox.InputBindings>
+                                    <KeyBinding Key="Return" Command="{Binding SearchCommand}" />
+                                </TextBox.InputBindings>
+                            </TextBox>
+
+                            <Button Grid.Column="2"
+                                    Style="{StaticResource IconButtonStyle}"
+                                    Command="{Binding ClearSearchCommand}"
+                                    Visibility="{Binding QueryText, Converter={StaticResource BoolToVis}, ConverterParameter=Invert, FallbackValue=Collapsed}"
+                                    ToolTip="清空搜索">
+                                <TextBlock Text="&#10005;" FontSize="11" Opacity="0.6" />
+                            </Button>
+                        </Grid>
+                    </Border>
+
+                    <Button Grid.Column="2"
+                            Style="{StaticResource PrimaryButtonStyle}"
+                            Command="{Binding SearchCommand}"
+                            Margin="12,0,0,0"
+                            Content="搜索" />
+                </Grid>
+            </Border>
+
+            <!-- 类型筛选行 FilterRow -->
+            <Border Grid.Row="1"
+                    Background="{StaticResource SurfaceBrush}"
+                    BorderBrush="{StaticResource BorderBrush1}"
+                    BorderThickness="0,0,0,1"
+                    Padding="16,10">
+                <ItemsControl ItemsSource="{Binding FilterChips}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:FilterChipViewModel}">
+                            <controls:FilterChipButton Margin="0,0,8,0" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Border>
+
+            <!-- 主内容区：搜索结果 / 空态 -->
+            <Grid Grid.Row="2">
+                <!-- 结果列表 -->
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              Padding="16"
+                              Visibility="{Binding HasNoResults, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}">
+                    <ItemsControl ItemsSource="{Binding SearchResults}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:SearchResultItemViewModel}">
+                                <controls:ResultCard Margin="0,0,0,10" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+
+                <!-- 空态：没有任何索引 -->
+                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="360">
+                    <StackPanel.Style>
+                        <Style TargetType="StackPanel">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding HasNoProfiles}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </StackPanel.Style>
+                    <TextBlock Text="&#128193;" FontSize="40" HorizontalAlignment="Center" Opacity="0.4" Margin="0,0,0,12" />
+                    <TextBlock Text="还没有任何索引" Style="{StaticResource TextTitle}" HorizontalAlignment="Center" />
+                    <TextBlock Text="新建一个索引，让寻迹为你的文件夹建立可离线搜索的档案"
+                               Style="{StaticResource TextCaption}"
+                               TextWrapping="Wrap"
+                               TextAlignment="Center"
+                               Margin="0,6,0,16" />
+                    <Button Style="{StaticResource PrimaryButtonStyle}"
+                            Content="+ 新建索引"
+                            HorizontalAlignment="Center"
+                            Command="{Binding OpenNewIndexDialogCommand}" />
+                </StackPanel>
+
+                <!-- 空态：搜索无结果 -->
+                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="360"
+                            Visibility="{Binding HasNoResults, Converter={StaticResource BoolToVis}}">
+                    <TextBlock Text="&#128269;" FontSize="40" HorizontalAlignment="Center" Opacity="0.4" Margin="0,0,0,12" />
+                    <TextBlock Text="没有找到匹配的文件" Style="{StaticResource TextTitle}" HorizontalAlignment="Center" />
+                    <TextBlock Text="试试更换关键词，或检查搜索语法（精确短语用引号，排除词用减号前缀）"
+                               Style="{StaticResource TextCaption}"
+                               TextWrapping="Wrap"
+                               TextAlignment="Center"
+                               Margin="0,6,0,0" />
+                </StackPanel>
+
+                <!-- 加载中遮罩 -->
+                <Border Background="#B3FFFFFF"
+                        Visibility="{Binding IsSearching, Converter={StaticResource BoolToVis}}">
+                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                        <controls:LoadingSpinner Width="32" Height="32" Margin="0,0,0,10" />
+                        <TextBlock Text="搜索中…" Style="{StaticResource TextCaption}" HorizontalAlignment="Center" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Grid>
+
+        <!-- ===================== 全局遮罩：新建索引对话框 ===================== -->
+        <Grid Grid.ColumnSpan="2"
+              Background="#66000000"
+              Visibility="{Binding IsNewIndexDialogOpen, Converter={StaticResource BoolToVis}}">
+            <!--
+                DataContext 切换为 MainViewModel.NewIndexDialog（NewIndexDialogViewModel），
+                所有表单字段绑定都基于这个嵌套视图模型。对话框内"取消/创建索引"两个按钮
+                需要回调 MainViewModel 的 Cancel/ConfirmNewIndexDialogCommand ——
+                做法见 NewIndexDialog.xaml.cs：通过 Application.Current.MainWindow.DataContext
+                取回 MainViewModel 引用后调用对应命令，避免为了两个按钮引入额外的
+                MultiBinding/FindAncestor 复杂度。
+            -->
+            <controls:NewIndexDialog DataContext="{Binding NewIndexDialog}"
+                                      HorizontalAlignment="Center"
+                                      VerticalAlignment="Center" />
+        </Grid>
+
+        <!-- ===================== 全局遮罩：关于对话框 ===================== -->
+        <Grid Grid.ColumnSpan="2"
+              Background="#66000000"
+              Visibility="{Binding IsAboutDialogOpen, Converter={StaticResource BoolToVis}}">
+            <controls:AboutDialog DataContext="{Binding AboutDialog}"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+        </Grid>
+    </Grid>
+</Window>

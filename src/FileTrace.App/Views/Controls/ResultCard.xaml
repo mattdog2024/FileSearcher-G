@@ -1,0 +1,82 @@
+<UserControl x:Class="FileTrace.App.Views.Controls.ResultCard"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:vm="clr-namespace:FileTrace.App.ViewModels"
+             xmlns:conv="clr-namespace:FileTrace.App.Converters"
+             xmlns:behaviors="clr-namespace:FileTrace.App.Behaviors"
+             mc:Ignorable="d"
+             d:DesignWidth="700"
+             d:DataContext="{d:DesignInstance Type=vm:SearchResultItemViewModel}">
+
+    <UserControl.Resources>
+        <conv:HexColorToBrushConverter x:Key="HexToBrush" />
+        <conv:BoolToVisibilityConverter x:Key="BoolToVis" />
+    </UserControl.Resources>
+
+    <Border Style="{StaticResource CardBorderStyle}" Cursor="Hand" MouseLeftButtonUp="OnCardClicked">
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- 左侧类型色块 -->
+            <Border Grid.Column="0"
+                    Width="44" Height="44"
+                    CornerRadius="6"
+                    Background="{Binding TypeIconColorHex, Converter={StaticResource HexToBrush}}"
+                    VerticalAlignment="Top"
+                    Margin="0,0,12,0">
+                <TextBlock Text="{Binding TypeIconLabel}"
+                           Foreground="White"
+                           FontSize="10"
+                           FontWeight="Bold"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center" />
+            </Border>
+
+            <StackPanel Grid.Column="1">
+                <!-- 文件名（带高亮） -->
+                <TextBlock behaviors:HighlightTextBehavior.Segments="{Binding FileNameSegments}"
+                           Style="{StaticResource TextBody}"
+                           FontWeight="SemiBold"
+                           TextWrapping="Wrap" />
+
+                <!-- 路径 -->
+                <TextBlock Text="{Binding DirectoryPath}"
+                           Style="{StaticResource TextCaption}"
+                           Margin="0,2,0,0"
+                           ToolTip="{Binding FullPath}" />
+
+                <!-- 内容摘要（带高亮）或无预览提示 -->
+                <TextBlock Text="{Binding NoPreviewHint}"
+                           Style="{StaticResource TextMicro}"
+                           FontStyle="Italic"
+                           Margin="0,8,0,0"
+                           Visibility="{Binding HasContentPreview, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}" />
+
+                <Border Background="{StaticResource SurfaceAltBrush}"
+                        CornerRadius="4"
+                        Padding="10,8"
+                        Margin="0,8,0,0"
+                        Visibility="{Binding HasContentPreview, Converter={StaticResource BoolToVis}}">
+                    <TextBlock behaviors:HighlightTextBehavior.Segments="{Binding ContentSegments}"
+                               Style="{StaticResource TextCaption}"
+                               Foreground="{StaticResource TextPrimaryBrush}"
+                               TextWrapping="Wrap"
+                               MaxHeight="54"
+                               TextTrimming="CharacterEllipsis" />
+                </Border>
+
+                <!-- 底部信息行 -->
+                <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                    <TextBlock Text="{Binding SizeDisplay}" Style="{StaticResource TextMicro}" />
+                    <TextBlock Text=" · " Style="{StaticResource TextMicro}" />
+                    <TextBlock Text="{Binding LastWriteDisplay}" Style="{StaticResource TextMicro}" />
+                </StackPanel>
+            </StackPanel>
+        </Grid>
+    </Border>
+</UserControl>

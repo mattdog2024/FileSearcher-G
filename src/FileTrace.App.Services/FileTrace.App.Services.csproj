@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!--
+      本项目承载 FileTrace.App 的服务层抽象（IIndexProfileRepository/ISearchGateway/
+      IIndexingService）及其 Mock/Real 实现。刻意拆分成一个不依赖 WPF 的纯 net8.0
+      类库（而不是留在 FileTrace.App 内部），是因为这些类型全部是纯 C# 业务逻辑，
+      不引用任何 System.Windows.* 类型——独立出来后：
+        1) 可以在 Linux 沙箱环境下用普通 `dotnet test` 直接跑（不需要 Windows Desktop
+           Runtime，也不需要 EnableWindowsTargeting 的编译期 Ref Pack 技巧）；
+        2) 关注点分离更清晰：UI 项目(FileTrace.App)只做 View/ViewModel/组合根。
+      命名空间保持 FileTrace.App.Services（历史沿革），只是物理上挪到了独立程序集。
+    -->
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>FileTrace.App.Services</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FileTrace.Core\FileTrace.Core.csproj" />
+  </ItemGroup>
+
+</Project>

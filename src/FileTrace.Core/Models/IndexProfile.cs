@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace FileTrace.Core.Models;
 
 /// <summary>
@@ -70,7 +72,12 @@ public sealed class IndexProfile
     /// <summary>已索引文件的总大小（字节）。</summary>
     public long TotalSizeBytes { get; set; }
 
+    [JsonIgnore]
     public string LuceneDirectory => Path.Combine(StoragePath, "lucene");
+
+    [JsonIgnore]
     public string ManifestDbPath => Path.Combine(StoragePath, "manifest.db");
+
+    [JsonIgnore]
     public string ProfileJsonPath => Path.Combine(StoragePath, "profile.json");
 }
